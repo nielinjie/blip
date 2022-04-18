@@ -4,11 +4,9 @@ const { TextArea } = Input;
 import { Typography } from 'antd';
 
 const { Title } = Typography;
-import('../w')
-  .then((a) => (wasmAdapter = a))
-  .catch((e) => console.error('Error importing `w.ts`:', e));
 
-let wasmAdapter: any = undefined;
+import {wasmAdapter} from '../w'
+
 
 const layout = {
   labelCol: {

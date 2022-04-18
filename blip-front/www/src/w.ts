@@ -1,5 +1,5 @@
-import * as wasm from 'blip-front-wasm';
+export let wasmAdapter: any = undefined;
 
-export const compute = function (item:object):string {
-  return wasm.compute(item);
-};
+import('blip-front-wasm')
+  .then((a) => (wasmAdapter = a))
+  .catch((e) => console.error('Error importing `blip-front-wasm`:', e));
