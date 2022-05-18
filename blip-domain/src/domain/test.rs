@@ -27,7 +27,7 @@ fn code_god() {
     assert_eq!(item.code(), item2.code());
     assert_eq!(item.code(), item3.code());
     assert_eq!(item.code(), "chxysmqzlxvjecmfypjawfdsokab"); //len()==28?
-    assert_eq!(item.masked_code(), Some("c".to_string()));
+    assert_eq!(item.masked_code(), Some((0,"c".to_string())));
 
     let now: DateTime<Utc> = Utc::now();
     let item4 = Item {
