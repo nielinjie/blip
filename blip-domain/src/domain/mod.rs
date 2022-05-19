@@ -30,7 +30,7 @@ impl Item {
         // 一般的mask就是level， 1/2/3，
         // 高级mask还没想好，比如可能： c1, c*, *f*
         match self.mask.parse::<usize>() {
-            Ok(head) => return Some((0, code.chars().take(head).collect())),
+            Ok(head) => return Some((0, code[0..head].to_string())),
             _ => match mask_available(&self.mask) {
                 Ok(mask_string) => match_on_code(&code, &mask_string)
                     .map(|(start, end)| (start, code[start..end].to_string())),
@@ -50,6 +50,6 @@ pub fn god_point() -> Item {
 }
 
 mod mask;
-
+mod mask_parse;
 #[cfg(test)]
 mod test;

@@ -38,14 +38,14 @@ fn mask_to_regex(mask: &str) -> Result<String, String> {
     res.push_str("$");
     Ok(res)
 }
-fn match_(code: &str, mask: &str) -> Option<(usize, usize)> {
+fn match_(code: &str, mask_regex_str: &str) -> Option<(usize, usize)> {
     // let re = mask_to_regex(mask);
-    let reg = Regex::new(mask).unwrap();
+    let reg = Regex::new(mask_regex_str).unwrap();
     let mat = reg.find(code);
     mat.map(|m| (m.start(), m.end()))
 }
-fn match_captures(code: &str, mask: &str) -> Option<(usize, usize)> {
-    let reg = Regex::new(mask).unwrap();
+fn match_captures(code: &str, mask_regex_str: &str) -> Option<(usize, usize)> {
+    let reg = Regex::new(mask_regex_str).unwrap();
     let mat = reg.captures(code);
     mat.map(|c| c.get(1).map(|m| (m.start(), m.end())))
         .flatten()
@@ -53,7 +53,6 @@ fn match_captures(code: &str, mask: &str) -> Option<(usize, usize)> {
 
 pub fn match_on_code(code: &str, mask: &str) -> Option<(usize, usize)> {
     let regex_string = mask_to_regex(mask);
-
     match_captures(code, &regex_string.unwrap())
 }
 
