@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::code::hash;
 
-use self::mask::{mask_available, match_on_code};
+use self::{mask::Mask, piece::Pieces};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Item {
@@ -23,18 +23,20 @@ impl Item {
     pub fn code(&self) -> String {
         hash(self.json().as_str()).into_iter().collect()
     }
-    pub fn masked_code(&self) -> Option<(usize, String)> {
+    pub fn masked_code(&self) -> Result<Pieces, String> {
         self.masked(self.code())
     }
-    pub fn masked(&self, code: String) -> Option<(usize, String)> {
+    pub fn masked(&self, code: String) -> Result<Pieces, String> {
         // 一般的mask就是level， 1/2/3，
-        // 高级mask还没想好，比如可能： c1, c*, *f*
+        // 高级mask还没想好，已经实现的比如：  c-, -f-
+        // 可能还有 -c2- ？
         match self.mask.parse::<usize>() {
-            Ok(head) => return Some((0, code[0..head].to_string())),
-            _ => match mask_available(&self.mask) {
-                Ok(mask_string) => match_on_code(&code, &mask_string)
-                    .map(|(start, end)| (start, code[start..end].to_string())),
-                _ => None,
+            Ok(head) => return Ok(Pieces::from_code_and_head_len(&code, head)),
+            _ => match Mask::from_str(&self.mask) {
+                Ok(mask) => mask
+                    .apply_to_code(&code)
+                    .map(|result| Pieces::from_code_and_result(&code, result)),
+                Err(e) => return Err(e),
             },
         }
     }
@@ -50,6 +52,6 @@ pub fn god_point() -> Item {
 }
 
 mod mask;
-mod mask_parse;
+pub mod piece;
 #[cfg(test)]
 mod test;

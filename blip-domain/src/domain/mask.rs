@@ -1,130 +1,123 @@
-use regex::Regex;
-
-pub fn mask_available(mask: &str) -> Result<String, String> {
-    let available_mask_regex = r"^\*?[a-z]+\*?$";
-    let available = Regex::new(available_mask_regex).unwrap();
-    if available.find(mask).is_none() {
-        return Err(format!("available mask is {}", available_mask_regex));
-    }
-    Ok(mask.to_string())
-}
-fn mask_to_regex(mask: &str) -> Result<String, String> {
-    mask_available(mask)?;
-    let mut re = "".to_string();
-    if mask.starts_with("*") {
-        if mask.ends_with("*") {
-            re.push_str(".+?(");
-            re.push_str(&mask[1..mask.len() - 1]);
-            re.push_str(").+");
-        } else {
-            re.push_str(".+?(");
-            re.push_str(&mask[1..mask.len()]);
-            re.push_str(")");
-        }
-    } else {
-        if mask.ends_with("*") {
-            re.push_str("(");
-            re.push_str(&mask[0..mask.len() - 1]);
-            re.push_str(").+");
-        } else {
-            re.push_str("(");
-            re.push_str(&mask[0..mask.len()]);
-            re.push_str(")");
-        }
-    }
-    //convert glob style to regex style
-    let mut res = "^".to_string();
-    res.push_str(&re);
-    res.push_str("$");
-    Ok(res)
-}
-fn match_(code: &str, mask_regex_str: &str) -> Option<(usize, usize)> {
-    // let re = mask_to_regex(mask);
-    let reg = Regex::new(mask_regex_str).unwrap();
-    let mat = reg.find(code);
-    mat.map(|m| (m.start(), m.end()))
-}
-fn match_captures(code: &str, mask_regex_str: &str) -> Option<(usize, usize)> {
-    let reg = Regex::new(mask_regex_str).unwrap();
-    let mat = reg.captures(code);
-    mat.map(|c| c.get(1).map(|m| (m.start(), m.end())))
-        .flatten()
+use nom::bytes::complete::tag;
+use nom::combinator::{complete, eof};
+use nom::sequence::terminated;
+use nom::Finish;
+use nom::{
+    character::complete::alpha1,
+    combinator::{map, opt},
+    multi::separated_list1,
+    sequence::tuple,
+    IResult,
+};
+use regex::{Match, Regex};
+#[derive(Debug, PartialEq)]
+pub struct Mask(bool, Vec<String>, bool);
+pub enum MaskResult {
+    NoMatch,
+    Matched(Vec<(usize, usize)>),
 }
 
-pub fn match_on_code(code: &str, mask: &str) -> Option<(usize, usize)> {
-    let regex_string = mask_to_regex(mask);
-    match_captures(code, &regex_string.unwrap())
+impl Mask {
+    fn to_regex_str(&self) -> String {
+        let mut ret = String::new();
+        if self.0 {
+            ret.push_str(".+?");
+        }
+        let middle = self
+            .1
+            .iter()
+            .map(|s| format!("({})", s))
+            .collect::<Vec<String>>()
+            .join(".+?");
+        ret.push_str(&middle);
+        if self.2 {
+            ret.push_str(".+")
+        }
+
+        format!("^{}$", ret)
+    }
+    pub fn apply_to_code(&self, code: &str) -> Result<MaskResult, String> {
+        let r = Regex::new(&self.to_regex_str());
+        match r {
+            Err(e) => return Err(format!("{}", e)),
+            Ok(r) => {
+                let mats = r
+                    .captures(code)
+                    .map(|c| c.iter().collect::<Option<Vec<Match>>>()); //.flatten();
+                match mats {
+                    Some(Some(m)) => Ok(if m.len() != 0 {
+                        MaskResult::Matched(m.into_iter().map(|m| (m.start(), m.end())).collect())
+                    } else {
+                        MaskResult::NoMatch
+                    }),
+                    _ => Ok(MaskResult::NoMatch),
+                }
+            }
+        }
+    }
+    pub fn from_str(input: &str) -> Result<Self, String> {
+        str_to_mask(input)
+    }
+}
+fn middle_parser(input: &str) -> IResult<&str, Vec<String>> {
+    map(
+        complete(separated_list1(tag("-"), alpha1)),
+        |v: Vec<&str>| {
+            v.into_iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>()
+        },
+    )(input)
+}
+fn mask_parser(input: &str) -> IResult<&str, Mask> {
+    map(
+        terminated(tuple((opt(tag("-")), middle_parser, opt(tag("-")))), eof),
+        |(first, v, last)| Mask(first.is_some(), v, last.is_some()),
+    )(input)
+}
+fn str_to_mask(input: &str) -> Result<Mask, String> {
+    match mask_parser(input).finish() {
+        Ok((_input, mask)) => Ok(mask),
+        Err(err) => Err(format!("{}", err)),
+    }
 }
 
 #[cfg(test)]
 #[test]
-fn good_match() {}
-
-#[test]
-fn regex_practice() {
-    let mask = "^a$";
-    let re = match_("abc", mask);
-    assert!(re.is_none());
-    let mask = "^a.+$";
-    let re = match_("abc", mask);
-    assert_eq!(re, Some((0, 3)));
-    let mask = "^(a).+$";
-    let re = match_captures("abc", mask);
-    assert_eq!(re, Some((0, 1)));
+fn into_regex_str() {
+    let mask = Mask(false, vec!["a".to_string()], true);
+    assert_eq!(mask.to_regex_str(), "^(a).+$");
+    let mask = Mask(true, vec!["a".to_string()], true);
+    assert_eq!(mask.to_regex_str(), "^.+?(a).+$");
+    let mask = Mask(true, vec!["a".to_string(), "bc".to_string()], true);
+    assert_eq!(mask.to_regex_str(), "^.+?(a).+?(bc).+$");
+    let mask = Mask(false, vec!["a".to_string(), "bc".to_string()], true);
+    assert_eq!(mask.to_regex_str(), "^(a).+?(bc).+$");
+    let mask = Mask(true, vec!["a".to_string(), "bc".to_string()], false);
+    assert_eq!(mask.to_regex_str(), "^.+?(a).+?(bc)$");
+    let mask = Mask(false, vec!["a".to_string(), "bc".to_string()], false);
+    assert_eq!(mask.to_regex_str(), "^(a).+?(bc)$");
 }
-#[test]
-fn mask_to_regex_test() {
-    let mask = "a";
-    let re = mask_to_regex(mask);
-    assert_eq!(re, Ok("^(a)$".to_string()));
-    let mask = "a*";
-    let re = mask_to_regex(mask);
-    assert_eq!(re, Ok("^(a).+$".to_string()));
-    let mask = "*a";
-    let re = mask_to_regex(mask);
-    assert_eq!(re, Ok("^.+?(a)$".to_string()));
-    let mask = "*a*";
-    let re = mask_to_regex(mask);
-    assert_eq!(re, Ok("^.+?(a).+$".to_string()));
 
-    let mask = "*";
-    let re = mask_to_regex(mask);
-    assert!(re.is_err());
-    let mask = "*a*b";
-    let re = mask_to_regex(mask);
-    assert!(re.is_err());
-    let mask = "**a";
-    let re = mask_to_regex(mask);
-    assert!(re.is_err());
-    let mask = "a**";
-    let re = mask_to_regex(mask);
-    assert!(re.is_err());
-}
 #[test]
-fn match_finally() {
-    let mask = "a*";
-    let re = match_on_code("abc", mask);
-    assert_eq!(re, Some((0, 1)));
-    let mask = "a";
-    let re = match_on_code("abc", mask);
-    assert_eq!(re, None);
-
-    let mask = "*a*";
-    let re = match_on_code("babc", mask);
-    assert_eq!(re, Some((1, 2)));
-    let mask = "*a*";
-    let re = match_on_code("babac", mask);
-    assert_eq!(re, Some((1, 2)));
-    let mask = "*a";
-    let re = match_on_code("babc", mask);
-    assert_eq!(re, None);
-    let mask = "*a";
-    let re = match_on_code("fsba", mask);
-    assert_eq!(re, Some((3, 4)));
-     let mask = "*ba";
-    let re = match_on_code("fsba", mask);
-    assert_eq!(re, Some((2, 4)));
-    let mask = "*ab*";
-    let re = match_on_code("babac", mask);
-    assert_eq!(re, Some((1, 3)));
+fn mask_parse() {
+    let re = str_to_mask("a");
+    assert_eq!(re, Ok(Mask(false, vec!["a".to_string()], false)));
+    let re = str_to_mask("-a");
+    assert_eq!(re, Ok(Mask(true, vec!["a".to_string()], false)));
+    let re = str_to_mask("-a-");
+    assert_eq!(re, Ok(Mask(true, vec!["a".to_string()], true)));
+    let re = str_to_mask("-ab-");
+    assert_eq!(re, Ok(Mask(true, vec!["ab".to_string()], true)));
+    let re = str_to_mask("-a-b-");
+    assert_eq!(
+        re,
+        Ok(Mask(true, vec!["a".to_string(), "b".to_string()], true))
+    );
+    let re = str_to_mask("--a-b-");
+    assert!(re.is_err());
+    let re = str_to_mask("a--b-");
+    assert!(re.is_err());
+    let re = str_to_mask("a-1-b-");
+    assert!(re.is_err());
 }

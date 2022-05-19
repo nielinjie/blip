@@ -1,6 +1,5 @@
 extern crate blip_domain;
 extern crate wasm_bindgen;
-
 use std::collections::HashMap;
 
 use blip_domain::domain::Item;
@@ -28,5 +27,5 @@ pub fn compute(item_json: JsValue) -> JsValue {
         attributes: HashMap::default(),
     };
     let code = item.code();
-    JsValue::from_serde(&(code.clone(), item.masked(code).unwrap_or_default())).unwrap()
+    JsValue::from_serde(&(code.clone(), item.masked(code))).unwrap()
 }
