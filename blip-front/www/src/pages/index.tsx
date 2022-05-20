@@ -6,6 +6,7 @@ import { Typography } from 'antd';
 const { Title } = Typography;
 
 import {wasmAdapter} from '../w'
+import CodeWithMask from '@/components/CodeWithMask';
 
 
 const layout = {
@@ -37,6 +38,23 @@ const Demo = () => {
         mask: allValues.mask || '1',
       });
       console.log(code);
+      /*
+      [
+    "quxwojdvmlorithsznnsskuuldeb",
+    {
+        "Ok": [
+            [
+                "q",
+                true
+            ],
+            [
+                "uxwojdvmlorithsznnsskuuldeb",
+                false
+            ]
+        ]
+    }
+]
+       */
       setCodes(code);
     }
   }, []);
@@ -89,14 +107,10 @@ const Demo = () => {
       <Layout>
         <Row justify="center">
           <Col>
-            <Title level={5}>{codes[0]}</Title>
+            <CodeWithMask code={codes}/>
           </Col>
         </Row>
-        <Row justify="center">
-          <Col>
-            <Title>{codes[1]}</Title>
-          </Col>
-        </Row>
+      
       </Layout>
     </>
   );

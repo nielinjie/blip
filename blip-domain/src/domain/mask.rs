@@ -10,8 +10,11 @@ use nom::{
     IResult,
 };
 use regex::{Match, Regex};
-#[derive(Debug, PartialEq)]
+
+use crate::domain::piece::Pieces;
+#[derive(Debug, PartialEq, Clone)]
 pub struct Mask(bool, Vec<String>, bool);
+#[derive(Debug, PartialEq, Clone)]
 pub enum MaskResult {
     NoMatch,
     Matched(Vec<(usize, usize)>),
@@ -46,7 +49,12 @@ impl Mask {
                     .map(|c| c.iter().collect::<Option<Vec<Match>>>()); //.flatten();
                 match mats {
                     Some(Some(m)) => Ok(if m.len() != 0 {
-                        MaskResult::Matched(m.into_iter().map(|m| (m.start(), m.end())).collect())
+                        MaskResult::Matched(
+                            m[1..m.len()]
+                                .into_iter()
+                                .map(|m| (m.start(), m.end()))
+                                .collect(),
+                        )
                     } else {
                         MaskResult::NoMatch
                     }),
@@ -120,4 +128,24 @@ fn mask_parse() {
     assert!(re.is_err());
     let re = str_to_mask("a-1-b-");
     assert!(re.is_err());
+}
+#[test]
+fn to_end() {
+    let re = str_to_mask("-a-");
+    assert_eq!(re.clone(), Ok(Mask(true, vec!["a".to_string()], true)));
+    let reg = re.clone().unwrap().to_regex_str();
+    assert_eq!(reg, "^.+?(a).+$");
+    let code = "yvgzgbyfahcahbxrtgsjgqjpuglb";
+    let mask = re.clone().unwrap();
+    let result = mask.apply_to_code(code);
+    assert_eq!(result.clone().unwrap(), MaskResult::Matched(vec![(8, 9)]));
+    let piece = Pieces::from_code_and_result(code, result.unwrap());
+    assert_eq!(
+        piece,
+        Pieces(vec![
+            ("yvgzgbyf".to_string(), false),
+            ("a".to_string(), true),
+            ("hcahbxrtgsjgqjpuglb".to_string(), false)
+        ])
+    )
 }
